@@ -19,9 +19,10 @@ Each line in the NDJSON files represents one release, e.g.:
   "artifacts": [
     {
       "platform": "aarch64-apple-darwin",
+      "variant": "default",
       "url": "https://github.com/astral-sh/uv/releases/download/0.8.3/uv-aarch64-apple-darwin.tar.gz",
-      "sha256_url": "https://github.com/astral-sh/uv/releases/download/0.8.3/uv-aarch64-apple-darwin.tar.gz.sha256",
-      "archive_format": "tar.gz"
+      "archive_format": "tar.gz",
+      "sha256": "fcf0a9ea6599c6ae..."
     }
   ]
 }
@@ -31,11 +32,21 @@ Each line in the NDJSON files represents one release, e.g.:
 
 ### Publishing a new version
 
-The publish script consumes a plan from `cargo-dist`:
+The publish script supports multiple input formats.
+
+For `cargo-dist` projects:
 
 ```bash
-cargo dist plan --output-format=json | uv run scripts/publish-version.py
+cargo dist plan --output-format=json | uv run scripts/publish-version.py --format cargo-dist
 ```
+
+For projects that emit a custom JSON payload (default format):
+
+```bash
+cat payload.json | uv run scripts/publish-version.py --name <project-name>
+```
+
+Payloads can include a top-level `versions` list to publish multiple versions at once.
 
 ### Backfilling historical versions
 
