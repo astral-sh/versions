@@ -2,13 +2,12 @@
 
 Tracks release metadata for Astral products.
 
-
 ## Format
 
 Release metadata is stored in versioned ndjson files:
 
-- `v1/` - Version
-  - `<name>.ndjson` - Release metadata
+- `v1/` - The version of the schema
+  - `<project>.ndjson` - The release metadata for a given project
 
 Each line in the NDJSON files represents one release, e.g.:
 
