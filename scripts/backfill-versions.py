@@ -441,8 +441,7 @@ def main() -> None:
     cutoff: datetime | None = None
     per_page = 100
     if project_name == "python-build-standalone":
-        cutoff = datetime.now(timezone.utc) - timedelta(days=90)
-        per_page = 20
+        per_page = 10
 
     # Fetch all releases
     print(f"Fetching releases from GitHub {org}/{repo}...", file=sys.stderr)
