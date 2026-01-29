@@ -6,8 +6,11 @@
 """Backfill historical versions from GitHub releases to NDJSON format.
 
 Usage:
-    # Backfill versions for a project (default: writes to ../v1/)
+    # Backfill all versions for a project (default: writes to ../v1/)
     backfill-versions.py <project-name>
+
+    # Backfill a single version (merges into existing file)
+    backfill-versions.py <project-name> --version 0.9.27
 
     # Specify custom GitHub org/repo
     backfill-versions.py <project-name> --github astral-sh/uv
@@ -184,6 +187,26 @@ def parse_pbs_asset_filename(filename: str) -> tuple[str, str, str] | None:
     variant = "+".join(variant_parts) if variant_parts else ""
     version = f"{python_version}+{build_version}"
     return triple, variant, version
+
+
+def fetch_github_release_by_tag(
+    org: str,
+    repo: str,
+    tag: str,
+) -> dict[str, Any]:
+    """Fetch a single release by tag from GitHub API."""
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    github_token = os.environ.get("GITHUB_TOKEN")
+    if github_token:
+        headers["Authorization"] = f"Bearer {github_token}"
+
+    with httpx.Client(timeout=30.0) as client:
+        response = client.get(
+            f"https://api.github.com/repos/{org}/{repo}/releases/tags/{tag}",
+            headers=headers,
+        )
+        response.raise_for_status()
+        return response.json()
 
 
 def fetch_github_releases(
@@ -409,6 +432,10 @@ def main() -> None:
         type=Path,
         help="Output directory (default: ../v1/ relative to this script)",
     )
+    parser.add_argument(
+        "--version",
+        help="Backfill a single version by tag (e.g., '0.9.27')",
+    )
     args = parser.parse_args()
 
     project_name = args.project_name
@@ -438,31 +465,68 @@ def main() -> None:
 
     versions_file = versions_repo / f"{project_name}.ndjson"
 
-    cutoff: datetime | None = None
-    per_page = 100
-    if project_name == "python-build-standalone":
-        per_page = 10
+    if args.version:
+        # Targeted backfill: fetch a single version and merge into existing file
+        tag = args.version
+        print(f"Fetching release {tag} from GitHub {org}/{repo}...", file=sys.stderr)
+        release = fetch_github_release_by_tag(org, repo, tag)
 
-    # Fetch all releases
-    print(f"Fetching releases from GitHub {org}/{repo}...", file=sys.stderr)
-    releases = fetch_github_releases(org, repo, per_page=per_page, cutoff=cutoff)
-    print(f"Found {len(releases)} releases", file=sys.stderr)
-
-    # Process releases
-    versions: list[Version] = []
-    with httpx.Client(timeout=30.0, follow_redirects=True) as client:
-        for release in releases:
-            release_versions = process_release(
-                release, project_name, org, repo, client, cutoff
+        new_versions: list[Version] = []
+        with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+            new_versions = process_release(
+                release, project_name, org, repo, client, cutoff=None
             )
-            for version in release_versions:
-                print(f"Processed version: {version['version']}", file=sys.stderr)
-                versions.append(version)
 
-    # Sort by date (newest first)
-    versions.sort(key=lambda v: v["date"], reverse=True)
+        if not new_versions:
+            print(f"No artifacts found for {tag}", file=sys.stderr)
+            sys.exit(1)
 
-    print(f"Processed {len(versions)} valid versions", file=sys.stderr)
+        for v in new_versions:
+            print(f"Processed version: {v['version']}", file=sys.stderr)
+
+        # Read existing versions
+        existing: list[Version] = []
+        if versions_file.exists():
+            with open(versions_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        existing.append(json.loads(line))
+
+        # Merge: replace existing entries with same version, or add new ones
+        new_version_ids = {v["version"] for v in new_versions}
+        merged = [v for v in existing if v["version"] not in new_version_ids]
+        merged.extend(new_versions)
+        merged.sort(key=lambda v: v["date"], reverse=True)
+
+        versions = merged
+        print(f"Merged into {len(versions)} total versions", file=sys.stderr)
+    else:
+        cutoff: datetime | None = None
+        per_page = 100
+        if project_name == "python-build-standalone":
+            per_page = 10
+
+        # Fetch all releases
+        print(f"Fetching releases from GitHub {org}/{repo}...", file=sys.stderr)
+        releases = fetch_github_releases(org, repo, per_page=per_page, cutoff=cutoff)
+        print(f"Found {len(releases)} releases", file=sys.stderr)
+
+        # Process releases
+        versions: list[Version] = []
+        with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+            for release in releases:
+                release_versions = process_release(
+                    release, project_name, org, repo, client, cutoff
+                )
+                for version in release_versions:
+                    print(f"Processed version: {version['version']}", file=sys.stderr)
+                    versions.append(version)
+
+        # Sort by date (newest first)
+        versions.sort(key=lambda v: v["date"], reverse=True)
+
+        print(f"Processed {len(versions)} valid versions", file=sys.stderr)
 
     # Ensure parent directory exists
     versions_file.parent.mkdir(parents=True, exist_ok=True)
