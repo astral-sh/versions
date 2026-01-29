@@ -27,29 +27,24 @@ Each line in the NDJSON files represents one release, e.g.:
 }
 ```
 
-## Usage
+## Adding versions
 
-### Publishing a new version
-
-The publish script supports multiple input formats.
-
-For `cargo-dist` projects:
+Use `insert-versions.py` to add versions. It reads NDJSON in the above format from stdin and inserts
+them into the target file, deduplicating by version string and ensuring the proper insertion order.
 
 ```bash
-cargo dist plan --output-format=json | uv run scripts/publish-version.py --format cargo-dist
+echo '{"version":"1.0.0","date":"...","artifacts":[...]}' | uv run scripts/insert-versions.py --name uv
 ```
 
-For projects that emit a custom JSON payload (default format):
+For convenience, there's support for converting `cargo-dist` plans into the NDJSON format. The
+SHA256 checksums are fetched from GitHub.
 
 ```bash
-cat payload.json | uv run scripts/publish-version.py --name <project-name>
+cargo dist plan --output-format=json | uv run scripts/convert-cargo-dist-plan.py | uv run scripts/insert-versions.py --name uv
 ```
 
-Payloads can include a top-level `versions` list to publish multiple versions at once.
-
-### Backfilling historical versions
-
-There's a backfill utility which pulls releases and artifacts from GitHub:
+There's also backfill utility which pulls releases and artifacts from GitHub and adds them to the
+registry.
 
 ```bash
 uv run scripts/backfill-versions.py <name>
