@@ -132,9 +132,8 @@ def main() -> None:
     incoming_version_strings = {v["version"] for v in new_versions}
     existing = [v for v in existing if v["version"] not in incoming_version_strings]
 
-    # Prepend new versions, cap at 100
+    # Prepend new versions
     versions = new_versions + existing
-    versions = versions[:100]
 
     # Write compact NDJSON
     with open(versions_path, "w") as f:
