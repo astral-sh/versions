@@ -17,7 +17,7 @@ import json
 import sys
 from pathlib import Path
 
-REQUIRED_ARTIFACT_KEYS = {"platform", "variant", "url", "archive_format", "sha256"}
+REQUIRED_ARTIFACT_KEYS = {"platform", "variant", "archive_format", "sha256"}
 VALID_ARCHIVE_FORMATS = {"tar.gz", "tar.zst", "zip"}
 
 
@@ -48,6 +48,17 @@ def validate_version(entry: dict) -> list[str]:
         if missing:
             errors.append(f"artifact[{i}]: missing keys {sorted(missing)}")
             continue
+
+        has_url = "url" in artifact
+        has_archive_filename = "archive_filename" in artifact
+        if has_url and has_archive_filename:
+            errors.append(f"artifact[{i}]: must have either 'url' or 'archive_filename', not both")
+        elif not has_url and not has_archive_filename:
+            errors.append(f"artifact[{i}]: must have either 'url' or 'archive_filename'")
+        elif has_url and not isinstance(artifact["url"], str):
+            errors.append(f"artifact[{i}]: 'url' must be a string")
+        elif has_archive_filename and not isinstance(artifact["archive_filename"], str):
+            errors.append(f"artifact[{i}]: 'archive_filename' must be a string")
 
         if artifact["archive_format"] not in VALID_ARCHIVE_FORMATS:
             errors.append(

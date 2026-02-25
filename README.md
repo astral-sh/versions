@@ -28,7 +28,8 @@ Each artifact object has the following fields:
 |-------|------|-------------|
 | `platform` | `string` | **Required.** Target triple (e.g. `"aarch64-apple-darwin"`, `"x86_64-pc-windows-msvc"`, `"x86_64-unknown-linux-gnu"`). |
 | `variant` | `string` | **Required.** Build variant. `"default"` for standard builds (uv, ruff). For python-build-standalone, describes the build configuration (e.g. `"install_only"`, `"install_only_stripped"`, `"pgo+lto+full"`, `"freethreaded+debug+full"`). |
-| `url` | `string` | **Required.** Direct download URL for the artifact. |
+| `url` | `string` | **Optional.** Direct download URL for the artifact. Exactly one of `url` or `archive_filename` must be present. |
+| `archive_filename` | `string` | **Optional.** Filename of the archive (e.g. `"uv-aarch64-apple-darwin.tar.gz"`). Exactly one of `url` or `archive_filename` must be present. Clients resolve the full URL using `mirrors.json`. |
 | `archive_format` | `string` | **Required.** One of `"tar.gz"`, `"tar.zst"`, or `"zip"`. |
 | `sha256` | `string` | **Required.** SHA-256 checksum of the artifact. |
 
@@ -42,13 +43,31 @@ Each artifact object has the following fields:
     {
       "platform": "aarch64-apple-darwin",
       "variant": "default",
-      "url": "https://github.com/astral-sh/uv/releases/download/0.8.3/uv-aarch64-apple-darwin.tar.gz",
+      "archive_filename": "uv-aarch64-apple-darwin.tar.gz",
       "archive_format": "tar.gz",
       "sha256": "fcf0a9ea6599c6ae..."
     }
   ]
 }
 ```
+
+### Mirrors
+
+The file `v1/mirrors.json` contains an array of mirror objects that clients use to resolve `archive_filename` values into full download URLs:
+
+```json
+[
+  {"url_template": "https://github.com/astral-sh/{project}/releases/download/{version}/"}
+]
+```
+
+Each mirror has a `url_template` field with `{project}` and `{version}` placeholders. To resolve a download URL, clients substitute the placeholders and append the `archive_filename`. For example, given the template above and an artifact with `archive_filename: "uv-aarch64-apple-darwin.tar.gz"` from project `uv` version `0.8.3`, the resolved URL is:
+
+```
+https://github.com/astral-sh/uv/releases/download/0.8.3/uv-aarch64-apple-darwin.tar.gz
+```
+
+Artifacts with a `url` field already contain the full download URL and do not need mirror resolution.
 
 ## Adding versions
 

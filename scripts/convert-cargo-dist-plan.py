@@ -120,7 +120,7 @@ def extract_version_info(
                 artifacts_data.append({
                     "platform": platform,
                     "variant": "default",
-                    "url": f"https://github.com/{github_org}/{github_repo}/releases/download/{version}/{artifact_name}",
+                    "archive_filename": artifact_name,
                     "archive_format": get_archive_format(artifact_name),
                     "sha256": sha256,
                 })

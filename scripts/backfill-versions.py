@@ -35,7 +35,8 @@ import httpx
 class Artifact(TypedDict):
     platform: str
     variant: str
-    url: str
+    url: NotRequired[str]
+    archive_filename: NotRequired[str]
     archive_format: str
     sha256: str
 
@@ -312,7 +313,7 @@ def process_pbs_release(
         artifact: Artifact = {
             "platform": platform,
             "variant": variant,
-            "url": browser_download_url,
+            "archive_filename": name,
             "archive_format": get_archive_format(name),
             "sha256": sha256,
         }
@@ -395,7 +396,7 @@ def process_release(
         artifact: Artifact = {
             "platform": platform,
             "variant": "default",
-            "url": browser_download_url,
+            "archive_filename": name,
             "archive_format": get_archive_format(name),
             "sha256": sha256,
         }
