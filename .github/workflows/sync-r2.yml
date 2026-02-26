@@ -1,0 +1,35 @@
+name: Sync NDJSON to R2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "v1/**.ndjson"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Upload NDJSON files to R2
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_BUCKET: ${{ vars.R2_BUCKET || 'release-assets' }}
+        run: |
+          for f in v1/*.ndjson; do
+            name=$(basename "$f")
+            aws s3 cp "$f" "s3://${R2_BUCKET}/github/versions/main/v1/${name}" \
+              --endpoint-url "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+              --content-type "application/x-ndjson" \
+              --cache-control "public, max-age=300"
+          done
