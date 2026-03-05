@@ -20,11 +20,11 @@ jobs:
 
       - name: Upload NDJSON files to R2
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.MIRROR_R2_CLOUDFLARE_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.MIRROR_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.MIRROR_R2_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
-          R2_BUCKET: ${{ vars.R2_BUCKET || 'release-assets' }}
+          R2_BUCKET: ${{ secrets.MIRROR_R2_BUCKET_NAME }}
         run: |
           for f in v1/*.ndjson; do
             name=$(basename "$f")
