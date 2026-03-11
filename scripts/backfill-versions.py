@@ -20,6 +20,7 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -50,6 +51,10 @@ class VersionsFile(TypedDict):
     versions: list[Version]
 
 
+# The first python-build-standalone release that includes a SHA256SUMS file.
+# For older releases the checksum is computed by downloading the artifact.
+PBS_CHECKSUM_RELEASE_START = 20220227
+
 PBS_FILENAME_RE = re.compile(
     r"""(?x)
     ^
@@ -59,6 +64,23 @@ PBS_FILENAME_RE = re.compile(
         (?P<triple>[a-z\d_]+-[a-z\d]+(?>-[a-z\d]+)?-(?!debug(?:-|$))[a-z\d_]+)-
         (?:(?P<build_options>.+)-)?
         (?P<flavor>[a-z_]+)?
+        \.tar\.(?:gz|zst)
+    $
+    """
+)
+
+# Older releases (pre-20220227) used a different filename format where the
+# date appears as a trailing timestamp rather than being embedded after "+":
+#   cpython-VERSION-TRIPLE-BUILDOPTS-TIMESTAMP.tar.zst
+# These releases also predate SHA256SUMS files; checksums are computed on the fly.
+PBS_LEGACY_FILENAME_RE = re.compile(
+    r"""(?x)
+    ^
+        cpython-
+        (?P<ver>\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?)(?:\+\d+)?-
+        (?P<triple>[a-z\d_-]+)-
+        (?P<build_options>debug|pgo\+lto|pgo|lto|noopt)?-
+        (?P<date>[a-zA-Z\d]+)
         \.tar\.(?:gz|zst)
     $
     """
@@ -196,24 +218,73 @@ def fetch_release_checksums(
     return checksums
 
 
+def compute_sha256(client: httpx.Client, url: str) -> str:
+    """Download an artifact and compute its SHA256 checksum.
+
+    Used for old PBS releases that predate SHA256SUMS files.
+    Streams the download to avoid loading large files into memory.
+    """
+    for attempt in range(1, 4):
+        try:
+            with client.stream("GET", url) as response:
+                response.raise_for_status()
+                hasher = hashlib.sha256()
+                for chunk in response.iter_bytes(chunk_size=65536):
+                    hasher.update(chunk)
+                return hasher.hexdigest()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in {502, 503, 504} and attempt < 3:
+                time.sleep(2**attempt)
+                continue
+            raise
+        except httpx.TransportError:
+            if attempt < 3:
+                time.sleep(2**attempt)
+                continue
+            raise
+    assert False, "unreachable"
+
+
 def parse_pbs_asset_filename(filename: str) -> tuple[str, str, str] | None:
-    """Parse python-build-standalone asset filename."""
+    """Parse python-build-standalone asset filename.
+
+    Handles both the modern format (version+date embedded before the triple)
+    and the legacy format used by pre-20220227 releases (date as a trailing
+    timestamp, limited set of build option tokens).
+    """
     match = PBS_FILENAME_RE.match(filename)
-    if match is None:
-        return None
-    triple = match.group("triple")
-    build_options = match.group("build_options")
-    flavor = match.group("flavor")
-    python_version = match.group("ver")
-    build_version = match.group("date")
-    variant_parts: list[str] = []
-    if build_options:
-        variant_parts.extend(build_options.split("+"))
-    if flavor:
-        variant_parts.append(flavor)
-    variant = "+".join(variant_parts) if variant_parts else ""
-    version = f"{python_version}+{build_version}"
-    return triple, variant, version
+    if match is not None:
+        triple = match.group("triple")
+        build_options = match.group("build_options")
+        flavor = match.group("flavor")
+        python_version = match.group("ver")
+        build_version = match.group("date")
+        variant_parts: list[str] = []
+        if build_options:
+            variant_parts.extend(build_options.split("+"))
+        if flavor:
+            variant_parts.append(flavor)
+        variant = "+".join(variant_parts) if variant_parts else ""
+        version = f"{python_version}+{build_version}"
+        return triple, variant, version
+
+    match = PBS_LEGACY_FILENAME_RE.match(filename)
+    if match is not None:
+        triple = match.group("triple")
+        build_options = match.group("build_options")
+        python_version = match.group("ver")
+        # Timestamp like "20211017T1616" — keep only the date portion
+        build_version = match.group("date")[:8]
+        variant_parts = []
+        if build_options:
+            variant_parts.extend(build_options.split("+"))
+        # Legacy filenames have no flavor component; default to "full"
+        variant_parts.append("full")
+        variant = "+".join(variant_parts)
+        version = f"{python_version}+{build_version}"
+        return triple, variant, version
+
+    return None
 
 
 def fetch_github_release_by_tag(
@@ -306,6 +377,7 @@ def process_pbs_release(
     release: dict[str, Any], published_at: str, client: httpx.Client
 ) -> list[Version]:
     """Process python-build-standalone releases into our version format."""
+    release_tag = int(release.get("tag_name", 0))
     normalized_published_at = normalize_timestamp(published_at)
     if normalized_published_at is None:
         return []
@@ -337,8 +409,12 @@ def process_pbs_release(
 
         sha256 = checksums.get(name)
         if not sha256:
-            # Skip artifacts without checksum
-            continue
+            if release_tag >= PBS_CHECKSUM_RELEASE_START:
+                # Modern releases must have a checksum; skip artifacts missing one.
+                continue
+            # Old release without SHA256SUMS — download and compute the checksum.
+            print(f"  Computing SHA256 for {name}...", file=sys.stderr)
+            sha256 = compute_sha256(client, browser_download_url)
 
         artifact: Artifact = {
             "platform": platform,
