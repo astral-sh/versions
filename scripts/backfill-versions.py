@@ -25,9 +25,9 @@ import os
 import re
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, NotRequired, TypedDict
+from typing import Any, TypedDict
 
 import httpx
 
@@ -88,13 +88,40 @@ def extract_platform_from_filename(filename: str, project_name: str) -> str | No
 
 
 def parse_github_datetime(value: str) -> datetime | None:
-    """Parse GitHub ISO timestamps."""
+    """Parse an ISO 8601 timestamp and normalize it to UTC."""
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+def format_timestamp(value: datetime) -> str:
+    """Format a datetime in canonical UTC RFC3339 form."""
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def normalize_timestamp(value: str) -> str | None:
+    """Normalize a timestamp string to canonical UTC RFC3339 form."""
+    parsed = parse_github_datetime(value)
+    if parsed is None:
+        return None
+    return format_timestamp(parsed)
+
+
+def sort_versions_desc(versions: list[Version]) -> None:
+    """Sort versions newest-first using parsed timestamps."""
+    versions.sort(
+        key=lambda version: (
+            parse_github_datetime(version["date"])
+            or datetime.min.replace(tzinfo=timezone.utc)
+        ),
+        reverse=True,
+    )
 
 
 def parse_sha256sums(text: str) -> dict[str, str]:
@@ -279,6 +306,10 @@ def process_pbs_release(
     release: dict[str, Any], published_at: str, client: httpx.Client
 ) -> list[Version]:
     """Process python-build-standalone releases into our version format."""
+    normalized_published_at = normalize_timestamp(published_at)
+    if normalized_published_at is None:
+        return []
+
     assets = release.get("assets", [])
     if not assets:
         return []
@@ -327,7 +358,7 @@ def process_pbs_release(
         versions.append(
             {
                 "version": version,
-                "date": published_at,
+                "date": normalized_published_at,
                 "artifacts": artifacts,
             }
         )
@@ -358,11 +389,18 @@ def process_release(
         return []
 
     published_datetime = parse_github_datetime(published_at)
-    if cutoff and published_datetime and published_datetime < cutoff:
+    if published_datetime is None:
+        return []
+
+    if cutoff and published_datetime < cutoff:
+        return []
+
+    normalized_published_at = normalize_timestamp(published_at)
+    if normalized_published_at is None:
         return []
 
     if project_name == "python-build-standalone":
-        return process_pbs_release(release, published_at, client)
+        return process_pbs_release(release, normalized_published_at, client)
 
     # Fetch all checksums for this release
     checksums = fetch_release_checksums(release, client)
@@ -411,7 +449,7 @@ def process_release(
     return [
         {
             "version": tag_name,
-            "date": published_at,
+            "date": normalized_published_at,
             "artifacts": artifacts,
         }
     ]
@@ -497,7 +535,7 @@ def main() -> None:
         new_version_ids = {v["version"] for v in new_versions}
         merged = [v for v in existing if v["version"] not in new_version_ids]
         merged.extend(new_versions)
-        merged.sort(key=lambda v: v["date"], reverse=True)
+        sort_versions_desc(merged)
 
         versions = merged
         print(f"Merged into {len(versions)} total versions", file=sys.stderr)
@@ -524,7 +562,7 @@ def main() -> None:
                     versions.append(version)
 
         # Sort by date (newest first)
-        versions.sort(key=lambda v: v["date"], reverse=True)
+        sort_versions_desc(versions)
 
         print(f"Processed {len(versions)} valid versions", file=sys.stderr)
 

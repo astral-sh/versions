@@ -9,12 +9,13 @@ Release metadata is stored in versioned ndjson files:
 - `v1/` - The version of the schema
   - `<project>.ndjson` - The release metadata for a given project
 
-Each line in the NDJSON files represents one release, e.g.:
+Each line in the NDJSON files represents one release. `date` should be the
+GitHub release publish time in canonical UTC RFC3339 form, e.g.:
 
 ```json
 {
   "version": "0.8.3",
-  "date": "2025-07-29T16:45:46.646976+00:00",
+  "date": "2025-07-29T16:45:46Z",
   "artifacts": [
     {
       "platform": "aarch64-apple-darwin",
@@ -29,8 +30,9 @@ Each line in the NDJSON files represents one release, e.g.:
 
 ## Adding versions
 
-Use `insert-versions.py` to add versions. It reads NDJSON in the above format from stdin and inserts
-them into the target file, deduplicating by version string and ensuring the proper insertion order.
+Use `insert-versions.py` to add versions. It reads NDJSON in the above format from stdin and merges
+them into the target file, deduplicating by version string, normalizing timestamps, and keeping the
+file sorted newest-first.
 
 ```bash
 echo '{"version":"1.0.0","date":"...","artifacts":[...]}' | uv run scripts/insert-versions.py --name uv

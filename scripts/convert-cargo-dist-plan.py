@@ -6,13 +6,17 @@
 """Convert cargo-dist plan JSON to a version NDJSON line.
 
 Reads `cargo dist plan --output-format=json` from stdin and outputs
-a single NDJSON line to stdout.
+one NDJSON line to stdout.
+
+The output `date` is normalized to UTC RFC3339 and comes from the
+GitHub release's `published_at` timestamp.
 
 Usage:
     cargo dist plan --output-format=json | convert-cargo-dist-plan.py
 """
 
 import json
+import os
 import re
 import sys
 import time
@@ -34,6 +38,33 @@ def get_archive_format(filename: str) -> str:
         return "unknown"
 
 
+def build_github_headers() -> dict[str, str]:
+    """Build GitHub API headers, using GITHUB_TOKEN when available."""
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    github_token = os.environ.get("GITHUB_TOKEN")
+    if github_token:
+        headers["Authorization"] = f"Bearer {github_token}"
+    return headers
+
+
+def parse_timestamp(value: str) -> datetime:
+    """Parse an ISO 8601 timestamp and normalize it to UTC."""
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError(f"timestamp must include a timezone offset: {value!r}")
+    return parsed.astimezone(timezone.utc)
+
+
+def format_timestamp(value: datetime) -> str:
+    """Format a datetime in canonical UTC RFC3339 form."""
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def normalize_timestamp(value: str) -> str:
+    """Normalize a timestamp string to canonical UTC RFC3339 form."""
+    return format_timestamp(parse_timestamp(value))
+
+
 def fetch_sha256(client: httpx.Client, url: str) -> str | None:
     """Fetch SHA256 checksum from a .sha256 URL."""
     for attempt in range(1, 4):
@@ -51,6 +82,24 @@ def fetch_sha256(client: httpx.Client, url: str) -> str | None:
             return None
     return None
 
+
+def fetch_release_published_at(
+    client: httpx.Client, org: str, repo: str, tag: str
+) -> str:
+    """Fetch and normalize the GitHub release published_at timestamp."""
+    response = client.get(
+        f"https://api.github.com/repos/{org}/{repo}/releases/tags/{tag}",
+        headers=build_github_headers(),
+    )
+    response.raise_for_status()
+
+    published_at = response.json().get("published_at")
+    if not isinstance(published_at, str) or not published_at:
+        raise ValueError(
+            f"GitHub release {org}/{repo}@{tag} did not include a published_at timestamp"
+        )
+
+    return normalize_timestamp(published_at)
 
 
 def extract_github_info(manifest: dict[str, Any]) -> tuple[str, str, str]:
@@ -84,6 +133,7 @@ def extract_version_info(
     """Extract version information from cargo-dist manifest."""
     version = manifest["announcement_tag"]
     github_org, github_repo, app_name = extract_github_info(manifest)
+    published_at = fetch_release_published_at(client, github_org, github_repo, version)
     artifacts_data = []
 
     for release in manifest.get("releases", []):
@@ -130,7 +180,7 @@ def extract_version_info(
 
     return {
         "version": version,
-        "date": datetime.now(timezone.utc).isoformat(),
+        "date": published_at,
         "artifacts": artifacts_data,
     }
 
