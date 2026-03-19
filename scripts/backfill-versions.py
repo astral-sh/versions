@@ -245,12 +245,19 @@ def compute_sha256(client: httpx.Client, url: str) -> str:
     assert False, "unreachable"
 
 
-def parse_pbs_asset_filename(filename: str) -> tuple[str, str, str] | None:
+def parse_pbs_asset_filename(
+    filename: str, release_tag: str | None = None
+) -> tuple[str, str, str] | None:
     """Parse python-build-standalone asset filename.
 
     Handles both the modern format (version+date embedded before the triple)
     and the legacy format used by pre-20220227 releases (date as a trailing
     timestamp, limited set of build option tokens).
+
+    For legacy filenames the build timestamp embedded in the name may differ
+    from the actual release tag (typically by a day).  When *release_tag* is
+    provided it is used as the date component of the version string instead
+    of the filename timestamp.
     """
     match = PBS_FILENAME_RE.match(filename)
     if match is not None:
@@ -273,8 +280,9 @@ def parse_pbs_asset_filename(filename: str) -> tuple[str, str, str] | None:
         triple = match.group("triple")
         build_options = match.group("build_options")
         python_version = match.group("ver")
-        # Timestamp like "20211017T1616" — keep only the date portion
-        build_version = match.group("date")[:8]
+        # Use the release tag when available; the filename timestamp may
+        # differ from the actual release date by a day or more.
+        build_version = release_tag if release_tag else match.group("date")[:8]
         variant_parts = []
         if build_options:
             variant_parts.extend(build_options.split("+"))
@@ -377,7 +385,8 @@ def process_pbs_release(
     release: dict[str, Any], published_at: str, client: httpx.Client
 ) -> list[Version]:
     """Process python-build-standalone releases into our version format."""
-    release_tag = int(release.get("tag_name", 0))
+    release_tag_str = release.get("tag_name", "0")
+    release_tag = int(release_tag_str)
     normalized_published_at = normalize_timestamp(published_at)
     if normalized_published_at is None:
         return []
@@ -398,7 +407,7 @@ def process_pbs_release(
         ):
             continue
 
-        parsed = parse_pbs_asset_filename(name)
+        parsed = parse_pbs_asset_filename(name, release_tag=release_tag_str)
         if parsed is None:
             continue
         platform, variant, version = parsed
