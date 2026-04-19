@@ -26,7 +26,7 @@ Each artifact object has the following fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `platform` | `string` | **Required.** Target triple (e.g. `"aarch64-apple-darwin"`, `"x86_64-pc-windows-msvc"`, `"x86_64-unknown-linux-gnu"`). |
+| `platform` | `string` | **Required.** Platform identifier, usually a target triple (e.g. `"aarch64-apple-darwin"`, `"x86_64-pc-windows-msvc"`, `"x86_64-unknown-linux-gnu"`). Legacy `python-build-standalone` entries may use older non-triple values such as `"windows-amd64-shared"` or `"x86_64-pc-windows-msvc-static"`. |
 | `variant` | `string` | **Required.** Build variant. `"default"` for standard builds (uv, ruff). For python-build-standalone, describes the build configuration (e.g. `"install_only"`, `"install_only_stripped"`, `"pgo+lto+full"`, `"freethreaded+debug+full"`). |
 | `url` | `string` | **Required.** Direct download URL for the artifact. |
 | `archive_format` | `string` | **Required.** One of `"tar.gz"`, `"tar.zst"`, or `"zip"`. |
