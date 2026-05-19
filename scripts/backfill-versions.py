@@ -54,6 +54,9 @@ class VersionsFile(TypedDict):
 # The first python-build-standalone release that includes a SHA256SUMS file.
 # For older releases the checksum is computed by downloading the artifact.
 PBS_CHECKSUM_RELEASE_START = 20220227
+# These releases only carry the legacy `windows-amd64-shared` artifacts, which
+# are intentionally excluded from the published versions registry.
+PBS_RELEASE_TAG_BLOCKLIST = {"20200216", "20200408"}
 
 PBS_FILENAME_RE = re.compile(
     r"""(?x)
@@ -471,6 +474,12 @@ def process_release(
 
     # Skip if no tag or date
     if not tag_name or not published_at:
+        return []
+
+    if (
+        project_name == "python-build-standalone"
+        and tag_name in PBS_RELEASE_TAG_BLOCKLIST
+    ):
         return []
 
     published_datetime = parse_github_datetime(published_at)
