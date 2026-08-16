@@ -2,6 +2,8 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = ["httpx"]
+# [tool.uv]
+# exclude-newer = "P7D"
 # ///
 """Backfill historical versions from GitHub releases to NDJSON format.
 
