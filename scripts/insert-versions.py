@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.12"
+# [tool.uv]
+# exclude-newer = "P7D"
 # ///
 """Insert version objects into an NDJSON versions file.
 
