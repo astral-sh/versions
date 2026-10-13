@@ -3,6 +3,8 @@
 # requires-python = ">=3.12"
 # [tool.uv]
 # exclude-newer = "P7D"
+# require-build-hashes = true
+# preview-features = ["build-dependency-hashes"]
 # ///
 """Insert version objects into an NDJSON versions file.
 

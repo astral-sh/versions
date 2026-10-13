@@ -4,6 +4,8 @@
 # dependencies = ["httpx"]
 # [tool.uv]
 # exclude-newer = "P7D"
+# require-build-hashes = true
+# preview-features = ["build-dependency-hashes"]
 # ///
 """Backfill historical versions from GitHub releases to NDJSON format.
 
