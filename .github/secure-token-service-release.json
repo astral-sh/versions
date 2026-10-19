@@ -16,6 +16,12 @@
       "id": 976731654,
       "oidc_subject": "legacy"
     },
+    "serc": {
+      "name": "astral-sh/serc",
+      "id": 1385584662,
+      "oidc_subject": "immutable",
+      "owner_id": 115962839
+    },
     "ruff": {
       "name": "astral-sh/ruff",
       "id": 523043277,
@@ -40,6 +46,16 @@
     {
       "caller": "ty",
       "environment": "release",
+      "caller_workflow": "release.yml",
+      "reusable_workflow": "publish-versions.yml",
+      "on": ["workflow_dispatch"],
+      "permissions": { "contents": "write", "pull_requests": "write" },
+      "target": "versions"
+    },
+    {
+      "caller": "serc",
+      "environment": "release",
+      "caller_ref": "refs/heads/main",
       "caller_workflow": "release.yml",
       "reusable_workflow": "publish-versions.yml",
       "on": ["workflow_dispatch"],
