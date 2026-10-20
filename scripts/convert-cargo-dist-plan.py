@@ -4,6 +4,8 @@
 # dependencies = ["httpx"]
 # [tool.uv]
 # exclude-newer = "P7D"
+# [tool.uv.exclude-newer-package]
+# certifi = "2026-10-20T02:24:17Z"
 # ///
 """Convert cargo-dist plan JSON to a version NDJSON line.
 
