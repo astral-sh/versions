@@ -4,6 +4,13 @@
 # dependencies = ["httpx"]
 # [tool.uv]
 # exclude-newer = "P7D"
+#
+# [tool.uv.exclude-newer-package]
+# # Temporarily replace the rolling cutoff for certifi with a fixed
+# # timestamp to admit 2026.10.19, which removes a root linked to
+# # compromised intermediate CA keys. Remove the override once the release
+# # is at least seven days old.
+# certifi = "2026-10-20T02:24:17Z"
 # ///
 """Backfill historical versions from GitHub releases to NDJSON format.
 
