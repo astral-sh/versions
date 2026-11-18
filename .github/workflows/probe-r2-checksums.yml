@@ -28,9 +28,10 @@ jobs:
           : "${R2_BUCKET:?Missing R2 bucket name}"
 
           failed=0
+          archive=github/python-build-standalone/releases/download/20261110/cpython-3.16.0a2+20261110-x86_64-unknown-linux-gnu-freethreaded+pgo+lto-full.tar.zst
           for key in \
             github/python-build-standalone/releases/download/20261110/SHA256SUMS \
-            github/python-build-standalone/releases/download/20261110/cpython-3.16.0a2+20261110-x86_64-unknown-linux-gnu-freethreaded+pgo+lto-full.tar.zst \
+            "$archive" \
             github/versions/main/v1/python-build-standalone.ndjson; do
             for mode in default ENABLED; do
               options=()
@@ -54,4 +55,10 @@ jobs:
               fi
             done
           done
+
+          printf '\n%s (part 1)\n' "$archive"
+          aws --endpoint-url "$AWS_ENDPOINT_URL" s3api head-object \
+            --bucket "$R2_BUCKET" --key "$archive" --part-number 1 --output json \
+            --query '{ETag: ETag, ContentLength: ContentLength, ContentRange: ContentRange, PartsCount: PartsCount}' \
+            || failed=1
           exit "$failed"
