@@ -1,0 +1,56 @@
+name: Probe R2 HeadObject checksums
+
+on:
+  push:
+    branches: [ee/probe-r2-checksums]
+    paths: [.github/workflows/probe-r2-checksums.yml]
+
+permissions: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - name: Inspect checksums on existing mirror objects
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.MIRROR_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.MIRROR_R2_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: https://${{ secrets.MIRROR_R2_CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          AWS_DEFAULT_REGION: auto
+          AWS_PAGER: ""
+          R2_BUCKET: ${{ secrets.MIRROR_R2_BUCKET_NAME }}
+        run: |
+          : "${AWS_ACCESS_KEY_ID:?Missing R2 access key}"
+          : "${AWS_SECRET_ACCESS_KEY:?Missing R2 secret access key}"
+          : "${R2_BUCKET:?Missing R2 bucket name}"
+
+          failed=0
+          for key in \
+            github/python-build-standalone/releases/download/20261110/SHA256SUMS \
+            github/versions/main/v1/python-build-standalone.ndjson; do
+            for mode in default ENABLED; do
+              options=()
+              if [[ "$mode" == ENABLED ]]; then
+                options+=(--checksum-mode ENABLED)
+              fi
+              printf '\n%s (checksum mode: %s)\n' "$key" "$mode"
+              if ! aws --endpoint-url "$AWS_ENDPOINT_URL" s3api head-object \
+                --bucket "$R2_BUCKET" --key "$key" "${options[@]}" --output json \
+                --query '{
+                  ETag: ETag,
+                  ContentLength: ContentLength,
+                  ChecksumType: ChecksumType,
+                  ChecksumCRC64NVME: ChecksumCRC64NVME,
+                  ChecksumCRC32: ChecksumCRC32,
+                  ChecksumCRC32C: ChecksumCRC32C,
+                  ChecksumSHA1: ChecksumSHA1,
+                  ChecksumSHA256: ChecksumSHA256
+                }'; then
+                failed=1
+              fi
+            done
+          done
+          exit "$failed"
