@@ -30,6 +30,7 @@ jobs:
           failed=0
           for key in \
             github/python-build-standalone/releases/download/20261110/SHA256SUMS \
+            github/python-build-standalone/releases/download/20261110/cpython-3.16.0a2+20261110-x86_64-unknown-linux-gnu-freethreaded+pgo+lto-full.tar.zst \
             github/versions/main/v1/python-build-standalone.ndjson; do
             for mode in default ENABLED; do
               options=()
