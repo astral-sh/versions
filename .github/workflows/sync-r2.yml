@@ -19,17 +19,16 @@ jobs:
           persist-credentials: false
 
       - name: Upload NDJSON files to R2
+        uses: astral-sh/github-actions/upload-r2@46d9685eed35b39a3d83a8dde3a3b4e1bff97a8a # 2026.11.19.0
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.MIRROR_R2_CLOUDFLARE_ACCOUNT_ID }}
           AWS_ACCESS_KEY_ID: ${{ secrets.MIRROR_R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.MIRROR_R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          R2_BUCKET: ${{ secrets.MIRROR_R2_BUCKET_NAME }}
-        run: |
-          for f in v1/*.ndjson; do
-            name=$(basename "$f")
-            aws s3 cp "$f" "s3://${R2_BUCKET}/github/versions/main/v1/${name}" \
-              --endpoint-url "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com" \
-              --content-type "application/x-ndjson" \
-              --cache-control "public, max-age=300"
-          done
+        with:
+          account-id: ${{ secrets.MIRROR_R2_CLOUDFLARE_ACCOUNT_ID }}
+          bucket: ${{ secrets.MIRROR_R2_BUCKET_NAME }}
+          source-directory: v1
+          include: "*.ndjson"
+          prefix: github/versions/main/v1
+          if-exists: overwrite
+          cache-control: public, max-age=300
+          content-type: application/x-ndjson
